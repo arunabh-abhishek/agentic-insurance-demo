@@ -79,32 +79,38 @@ def agentic_underwrite(user_story, car_data, state):
         }
 
 # --- 3. UPDATED PDF TOOL ---
-def create_policy_pdf(tier_name, data, vin, reasoning, car_name):
-    # Clean text for PDF compatibility
-    clean_reasoning = reasoning.replace("’", "'").replace("“", '"').replace("”", '"')
-    
+def create_policy_pdf(name, data, vin_val, reasoning, car_name):
+    # This line must be indented 4 spaces inside the function
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("helvetica", 'B', 16)
-    pdf.cell(0, 10, f"Insurance Quote: {tier_name} Plan", ln=True, align='C')
-    pdf.ln(5)
-    pdf.set_font("helvetica", '', 10)
-    pdf.cell(0, 10, f"Vehicle: {car_name} | VIN: {vin}", ln=True)
-    pdf.cell(0, 10, f"Coverage Limit: {data['limit']}", ln=True)
-    pdf.ln(10)
     
-    pdf.set_font("helvetica", 'B', 12)
-    pdf.cell(0, 10, f"Monthly Premium: ${data['price']:.2f}", ln=True)
-    pdf.set_font("helvetica", 'I', 10)
-    pdf.multi_cell(0, 10, f"Agent Reasoning: {clean_reasoning}")
-    pdf.ln(5)
+    # 1. Clean the reasoning text to prevent the Unicode error
+    # This replaces fancy dashes and quotes with PDF-safe versions
+    safe_reasoning = reasoning.replace('—', '-').replace('–', '-').replace('“', '"').replace('”', '"').replace('’', "'")
+    # This removes markdown bolding symbols (**) so the PDF looks clean
+    safe_reasoning = safe_reasoning.replace('**', '') 
     
-    pdf.set_font("helvetica", 'B', 11)
-    pdf.cell(0, 10, "Plan Coverages:", ln=True)
-    pdf.set_font("helvetica", '', 10)
-    for feature in data['features']:
-        pdf.cell(0, 8, f"- {feature}", ln=True)
-        
+    # 2. Set Font and Add Content
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(200, 10, txt="Insurance Underwriting Report", ln=True, align='C')
+    
+    pdf.set_font("Arial", size=12)
+    pdf.ln(10) # Add a small gap
+    pdf.cell(200, 10, txt=f"Customer Name: {name}", ln=True)
+    pdf.cell(200, 10, txt=f"Vehicle: {car_name} (VIN: {vin_val})", ln=True)
+    pdf.cell(200, 10, txt=f"Safety Score: {data.get('SCORE', 'N/A')}/100", ln=True)
+    pdf.cell(200, 10, txt=f"Trust Index: {data.get('TRUST', 'N/A')}", ln=True)
+    pdf.cell(200, 10, txt=f"Fraud Risk: {data.get('FRAUD', 'N/A')}", ln=True)
+    
+    pdf.ln(5)
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(200, 10, txt="Underwriter Analysis:", ln=True)
+    
+    pdf.set_font("Arial", size=10)
+    # Use multi_cell for the long reasoning text
+    pdf.multi_cell(0, 7, txt=safe_reasoning)
+    
+    # Convert the bytearray to standard bytes for Streamlit
     return bytes(pdf.output())
 
 # --- 4. UI: INPUTS ---
@@ -129,6 +135,41 @@ with col2:
 
 with col3:
     user_story = st.text_area("Describe Driving Profile", placeholder="e.g., Experienced driver, 10 years clean history...", height=100)
+
+    # --- HOUSEHOLD ENRICHMENT SIMULATOR (Manager's Feature) ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("🏠 Household Enrichment")
+st.sidebar.caption("System Demo: Cross-sell & Lead Gen")
+
+# 1. Initialize the state so the app "remembers" if we scanned
+if "household_scanned" not in st.session_state:
+    st.session_state.household_scanned = False
+
+# 2. First Button: Perform the Scan
+if st.sidebar.button("🔍 Scan Household (SIMULATED)"):
+    st.session_state.household_scanned = True
+
+# 3. If we have scanned, show the results and the second button
+if st.session_state.household_scanned:
+    with st.sidebar:
+        # We only show the spinner the very first time we click
+        st.success("Enrichment Complete!")
+        st.info("**Detected at Address:**\n\n"
+                "* **Sarah A.** (Spouse, 42)\n"
+                "* **Jake A.** (Son, 19) - *High Risk/Unlisted*\n"
+                "* **2018 Honda CR-V** (Linked Asset)")
+        
+        st.warning("⚠️ **Premium Leakage Alert:** Unlisted driver 'Jake' detected at this household.")
+        
+        st.write("---")
+        st.markdown("**Sales Opportunity:**")
+        
+        # Now clicking this button won't make the info disappear
+        if st.button("Apply Multi-Car Discount"):
+            st.balloons()
+            st.success("✅ 15% Discount Applied to Quote!")
+
+st.sidebar.markdown("---")
 
 # --- 5. CHAIN OF THOUGHT ANALYSIS (FORCED REFRESH) ---
 if st.button("🚀 Run Agentic Analysis"):
@@ -223,6 +264,7 @@ if st.session_state.analyzed:
                 
                 pdf_bytes = create_policy_pdf(name, data, vin_val, reasoning, st.session_state.car_name)
                 st.download_button(label=f"Get {name} PDF", data=pdf_bytes, file_name=f"{name}_Quote.pdf", key=f"dl_{name}")
+                
 
     # --- 7. FEATURE COMPARISON TABLE ---
     st.divider()
